@@ -7,7 +7,7 @@ import {
 	NodeOperationError,
 } from 'n8n-workflow';
 
-import {WaxJS} from '@waxio/waxjs/dist';
+import { JsonRpc } from 'eosjs';
 
 interface WaxAsset {
 	asset_id: string;
@@ -94,15 +94,15 @@ export class WaxGetAssets implements INodeType {
 			const collections = collectionInput ? collectionInput.split(',').map(c => c.trim()).filter(c => c !== '') : [];
 			const schemas = schemaInput ? schemaInput.split(',').map(s => s.trim()).filter(s => s !== '') : [];
 
-			const wax = new WaxJS(endpoint);
+			// Use JsonRpc instead of WaxJS to avoid constructor parameter issues
+			const rpc = new JsonRpc(endpoint, { fetch });
 
 			const assets = new Array<WaxAsset>();
 
 			let result: { next_key: null|string, more: boolean, rows?: Array<any>} = { next_key: null, more: true };
 
 			do {
-				// @ts-ignore
-				result = await wax.rpc.get_table_rows({
+				result = await rpc.get_table_rows({
 					json: true,
 					code,
 					scope: account,

@@ -3,7 +3,6 @@ import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
 import { getCredentials } from './util';
-import { WaxJS } from '@waxio/waxjs/dist';
 import { WaxAsset } from './common';
 
 // Asset resource properties
@@ -174,15 +173,15 @@ export async function executeAssetOperations(
 		const collections = collectionInput ? collectionInput.split(',').map(c => c.trim()).filter(c => c !== '') : [];
 		const schemas = schemaInput ? schemaInput.split(',').map(s => s.trim()).filter(s => s !== '') : [];
 
-		const wax = new WaxJS(endpoint);
+		// Use JsonRpc instead of WaxJS to avoid constructor issues
+		const rpc = new JsonRpc(endpoint, { fetch });
 
 		const assets = new Array<WaxAsset>();
 
 		let result: { next_key: null|string, more: boolean, rows?: Array<any>} = { next_key: null, more: true };
 
 		do {
-			// @ts-ignore
-			result = await wax.rpc.get_table_rows({
+			result = await rpc.get_table_rows({
 				json: true,
 				code,
 				scope: account,

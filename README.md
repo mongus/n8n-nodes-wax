@@ -32,6 +32,9 @@ This node package provides the following operations for interacting with the WAX
 - **Stake CPU**: Stake WAX tokens for CPU resources on the blockchain
 - **Stake NET**: Stake WAX tokens for network bandwidth resources on the blockchain
 
+- **Execute Action**: Execute any action on any smart contract
+- **Get Table**: Query data from smart contract tables
+
 ## Credentials
 
 For operations that require signing transactions (Transfer Tokens, Transfer Assets, Buy RAM, Stake CPU, and Stake NET), you'll need to provide:
@@ -87,6 +90,21 @@ For Stake CPU and Stake NET operations:
 - Specify the amount of WAX to stake
 - Option to transfer ownership of staked resources to the recipient account (when enabled, the recipient account gains control of the staked tokens)
 
+
+### Execute Action Parameters:
+
+- Contract Account: The smart contract to interact with
+- Action Name: The action to execute
+- Actor Account: Account that signs the transaction
+- Action Data: JSON data to send to the contract
+
+### Get Table Parameters:
+
+- Contract Account: The smart contract containing the table
+- Table Name: Name of the table to query
+- Scope: Scope for the table query
+- Limit: Maximum number of rows to return
+
 ## Resources
 
 * [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
@@ -95,6 +113,11 @@ For Stake CPU and Stake NET operations:
 * [EOS Network Documentation](https://docs.eosnetwork.com/)
 
 ## Version history
+
+### 0.2
+- added Execute Action and Get Table
+- added WAX Smart Contract
+
 
 ### 0.1.7
 - Hide deprecated nodes from the UI search but keep them for backward compatibility for existing workflows

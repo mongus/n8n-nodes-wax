@@ -1,7 +1,10 @@
 {
-  "name": "n8n-nodes-wax",
-  "version": "0.1.12",
-  "description": "n8n Community Node Package for the WAX Blockchain",
+  "name": "n8n-nodes-wax-shady",
+  "version": "0.2.7",
+  "description": "n8n Community Node Package for the WAX Blockchain Fork",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "n8n",
     "n8n-community-node-package",
@@ -11,14 +14,13 @@
     "nft"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/mongus/n8n-nodes-wax",
+  "homepage": "https://github.com/jonathan42/n8n-nodes-wax",
   "author": {
-    "name": "Aaron Porter",
-    "email": "aaron@mongus.com"
+    "name": "Jonathan 42"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mongus/n8n-nodes-wax"
+    "url": "git+https://github.com/jonathan42/n8n-nodes-wax.git"
   },
   "engines": {
     "node": ">=20.15"
@@ -47,7 +49,9 @@
       "dist/nodes/WaxGetBalance/WaxGetBalance.node.js",
       "dist/nodes/WaxTransferNft/WaxTransferNft.node.js",
       "dist/nodes/WaxTransferToken/WaxTransferToken.node.js",
-      "dist/nodes/WaxVerifyAddress/WaxVerifyAddress.node.js"
+      "dist/nodes/WaxVerifyAddress/WaxVerifyAddress.node.js",
+      "dist/nodes/WaxSmartContract/WaxSmartContract.node.js",
+      "dist/nodes/WaxMultiAction/WaxMultiAction.node.js"
     ]
   },
   "devDependencies": {
@@ -65,8 +69,9 @@
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "@waxio/waxjs": "^0.0.15",
-    "axios": "^1.10.0",
-    "eosjs": "^22.1.0"
+    "@waxio/waxjs": "^1.7.1",
+    "axios": "^1.11.0",
+    "eosjs": "^22.1.0",
+    "node-fetch": "^3.3.2"
   }
 }
