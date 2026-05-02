@@ -8,7 +8,7 @@ import {
 } from 'n8n-workflow';
 
 import {WaxJS} from '@waxio/waxjs/dist';
-import { requireAccountName, validateEndpoint } from '../Wax/resources/util';
+import { MAX_PAGINATION_ITERATIONS, requireAccountName, validateEndpoint } from '../Wax/resources/util';
 
 interface WaxAsset {
 	asset_id: string;
@@ -101,8 +101,14 @@ export class WaxGetAssets implements INodeType {
 			const assets = new Array<WaxAsset>();
 
 			let result: { next_key: null|string, more: boolean, rows?: Array<any>} = { next_key: null, more: true };
+			let iterations = 0;
+			let lastKey: string | null = null;
 
 			do {
+				if (++iterations > MAX_PAGINATION_ITERATIONS) {
+					throw new NodeOperationError(this.getNode(), `get_table_rows pagination exceeded ${MAX_PAGINATION_ITERATIONS} iterations`);
+				}
+
 				// @ts-ignore
 				result = await wax.rpc.get_table_rows({
 					json: true,
@@ -114,6 +120,11 @@ export class WaxGetAssets implements INodeType {
 					reverse: false,
 					show_payer: false,
 				});
+
+				if (result.more && result.next_key !== null && result.next_key === lastKey) {
+					throw new NodeOperationError(this.getNode(), 'get_table_rows pagination did not advance');
+				}
+				lastKey = result.next_key;
 
 				// Check if result has the expected structure
 				if (!result) {

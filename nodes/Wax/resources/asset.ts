@@ -4,6 +4,7 @@ import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
 import {
 	getCredentials,
+	MAX_PAGINATION_ITERATIONS,
 	normalizeMemo,
 	requireAccountName,
 	requireAssetIds,
@@ -186,8 +187,14 @@ export async function executeAssetOperations(
 		const assets = new Array<WaxAsset>();
 
 		let result: { next_key: null|string, more: boolean, rows?: Array<any>} = { next_key: null, more: true };
+		let iterations = 0;
+		let lastKey: string | null = null;
 
 		do {
+			if (++iterations > MAX_PAGINATION_ITERATIONS) {
+				throw new NodeOperationError(this.getNode(), `get_table_rows pagination exceeded ${MAX_PAGINATION_ITERATIONS} iterations`);
+			}
+
 			// @ts-ignore
 			result = await wax.rpc.get_table_rows({
 				json: true,
@@ -199,6 +206,11 @@ export async function executeAssetOperations(
 				reverse: false,
 				show_payer: false,
 			});
+
+			if (result.more && result.next_key !== null && result.next_key === lastKey) {
+				throw new NodeOperationError(this.getNode(), 'get_table_rows pagination did not advance');
+			}
+			lastKey = result.next_key;
 
 			// Check if result has the expected structure
 			if (!result) {

@@ -87,6 +87,8 @@ export function buildUrl(endpoint: string, path: string): string {
 	return new URL(basePath + rel, base).toString();
 }
 
+export const MAX_PAGINATION_ITERATIONS = 5000;
+
 const ACCOUNT_NAME_RE = /^[a-z1-5.]+$/;
 const SYMBOL_RE = /^[A-Z]{1,7}$/;
 const ASSET_ID_RE = /^\d+$/;
