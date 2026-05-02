@@ -5,6 +5,7 @@ import { accountProperties, executeAccountOperations } from './account';
 import { tokenProperties, executeTokenOperations } from './token';
 import { assetProperties, executeAssetOperations } from './asset';
 import { schemaProperties, executeSchemaOperations } from './schema';
+import { templateProperties, executeTemplateOperations } from './template';
 
 export const properties: INodeProperties[] = [
 	...commonProperties,
@@ -12,6 +13,7 @@ export const properties: INodeProperties[] = [
 	...tokenProperties,
 	...assetProperties,
 	...schemaProperties,
+	...templateProperties,
 ];
 
 export async function executeOperation(
@@ -29,6 +31,8 @@ export async function executeOperation(
 		return await executeAssetOperations.call(this, items, i);
 	} else if (resource === 'schema') {
 		return await executeSchemaOperations.call(this, items, i);
+	} else if (resource === 'template') {
+		return await executeTemplateOperations.call(this, items, i);
 	}
 
 	return Promise.reject(new Error(`The resource "${resource}" is not supported.`));
