@@ -9,7 +9,7 @@ import {
 import { properties, executeOperation } from './resources';
 import { safeError } from './resources/util';
 
-const subtitle = `={{ ( { ${Object.entries(properties.reduce((acc, prop) => {
+const operationLabels = properties.reduce((acc, prop) => {
 	if (prop.name === 'operation') {
 		prop.options?.forEach(option => {
 			const value = (option as INodePropertyOptions).value;
@@ -17,11 +17,10 @@ const subtitle = `={{ ( { ${Object.entries(properties.reduce((acc, prop) => {
 				acc[String(value)] = option.name;
 		});
 	}
-
 	return acc;
-}, {} as {[operation: string]: string }))
-	.map(([key, value]) => `"${key}": "${value}"`)
-	.join(', ') } } )[$parameter["operation"]] }}`;
+}, {} as { [operation: string]: string });
+
+const subtitle = `={{ (${JSON.stringify(operationLabels)})[$parameter["operation"]] }}`;
 
 export class Wax implements INodeType {
 	description: INodeTypeDescription = {
