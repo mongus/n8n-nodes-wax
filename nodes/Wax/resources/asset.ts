@@ -10,6 +10,16 @@ import {
 	requireAssetIds,
 	validateEndpoint,
 } from './util';
+import { ActionGenerator } from 'atomicassets/build/Actions/Generator';
+import {
+	buildAttributeMap,
+	createAtomicRpc,
+	ensureAuthorized,
+	ensureTemplateExists,
+	fetchSchemaFormat,
+	parseTokensToBack,
+	requireTemplateId,
+} from './atomic';
 import { WaxJS } from '@waxio/waxjs/dist';
 import { WaxAsset } from './common';
 
@@ -31,6 +41,12 @@ export const assetProperties: INodeProperties[] = [
 				value: 'getAssets',
 				description: 'Get a list of assets owned by an account',
 				action: 'Get a list of assets owned by an account',
+			},
+			{
+				name: 'Mint Asset',
+				value: 'mintAsset',
+				description: 'Mint an asset from a template',
+				action: 'Mint an asset from a template',
 			},
 			{
 				name: 'Transfer Assets',
@@ -158,6 +174,101 @@ export const assetProperties: INodeProperties[] = [
 			},
 		},
 	},
+	// Mint asset parameters
+	{
+		displayName: 'Collection Name',
+		name: 'collectionName',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'AtomicAssets collection that owns the template',
+	},
+	{
+		displayName: 'Template ID',
+		name: 'templateIdMint',
+		type: 'number',
+		default: 0,
+		required: true,
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'ID of the template to mint from. Schema is derived from the template.',
+	},
+	{
+		displayName: 'New Asset Owner',
+		name: 'newAssetOwner',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'Account that will receive the minted asset',
+	},
+	{
+		displayName: 'Contract',
+		name: 'contractMint',
+		type: 'string',
+		default: 'atomicassets',
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'AtomicAssets contract account. Pin to a literal value - this is signed under your active permission.',
+	},
+	{
+		displayName: 'Immutable Data Override (JSON)',
+		name: 'immutableDataMint',
+		type: 'json',
+		default: '{}',
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'Per-asset immutable data overrides as a JSON object whose keys/types match the schema format. Usually empty when minting from a template.',
+	},
+	{
+		displayName: 'Mutable Data (JSON)',
+		name: 'mutableDataMint',
+		type: 'json',
+		default: '{}',
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'Per-asset mutable data as a JSON object whose keys/types match the schema format',
+	},
+	{
+		displayName: 'Back with Assets',
+		name: 'backWithAssets',
+		type: 'string',
+		default: '',
+		displayOptions: {
+			show: {
+				resource: ['asset'],
+				operation: ['mintAsset'],
+			},
+		},
+		description: 'Optional comma-separated list of EOSIO asset strings (e.g., "1.00000000 WAX") to back the minted NFT with. Maps to atomicassets::mintasset tokens_to_back.',
+	},
 ];
 
 // Asset operations execution
@@ -168,7 +279,8 @@ export async function executeAssetOperations(
 ): Promise<{ returnData?: INodeExecutionData, invalidData?: INodeExecutionData }> {
 	const operation = this.getNodeParameter('operation', i) as string;
 	const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
-	const endpoint = validateEndpoint(this, rawEndpoint, { signing: operation === 'transferAssets' });
+	const signing = operation === 'transferAssets' || operation === 'mintAsset';
+	const endpoint = validateEndpoint(this, rawEndpoint, { signing });
 
 	if (operation === 'getAssets') {
 		const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
@@ -289,6 +401,96 @@ export async function executeAssetOperations(
 			returnData: {
 				json: { result }
 			}
+		};
+	} else if (operation === 'mintAsset') {
+		const credentials = await getCredentials(this);
+		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
+		const key = credentials.privateKey as string;
+
+		const collectionName = requireAccountName(
+			this,
+			this.getNodeParameter('collectionName', i),
+			'Collection Name',
+		);
+		const templateId = requireTemplateId(
+			this,
+			this.getNodeParameter('templateIdMint', i),
+			'Template ID',
+		);
+		const newAssetOwner = requireAccountName(
+			this,
+			this.getNodeParameter('newAssetOwner', i),
+			'New Asset Owner',
+		);
+		const contract = requireAccountName(
+			this,
+			this.getNodeParameter('contractMint', i),
+			'Contract',
+		);
+
+		const atomicRpc = createAtomicRpc(endpoint, contract);
+		await ensureAuthorized(this, atomicRpc, collectionName, from);
+		const { schema_name: schemaName } = await ensureTemplateExists(
+			this,
+			atomicRpc,
+			collectionName,
+			templateId,
+		);
+		const format = await fetchSchemaFormat(this, atomicRpc, collectionName, schemaName);
+
+		const immutableData = buildAttributeMap(
+			this,
+			this.getNodeParameter('immutableDataMint', i),
+			format,
+			'Immutable Data Override',
+		);
+		const mutableData = buildAttributeMap(
+			this,
+			this.getNodeParameter('mutableDataMint', i),
+			format,
+			'Mutable Data',
+		);
+		const tokensToBack = parseTokensToBack(
+			this,
+			this.getNodeParameter('backWithAssets', i),
+			'Back with Assets',
+		);
+
+		const generator = new ActionGenerator(contract);
+		const actions = await generator.mintasset(
+			[{ actor: from, permission: 'active' }],
+			from,
+			collectionName,
+			schemaName,
+			templateId,
+			newAssetOwner,
+			immutableData,
+			mutableData,
+			tokensToBack,
+		);
+
+		const signatureProvider = new JsSignatureProvider([key]);
+		const rpc = new JsonRpc(endpoint, { fetch });
+		const api = new Api({
+			rpc,
+			signatureProvider,
+			textDecoder: new TextDecoder(),
+			textEncoder: new TextEncoder(),
+		});
+
+		const result = await api.transact({ actions }, { blocksBehind: 3, expireSeconds: 30 });
+
+		return {
+			returnData: {
+				json: {
+					success: true,
+					collection_name: collectionName,
+					schema_name: schemaName,
+					template_id: templateId,
+					new_asset_owner: newAssetOwner,
+					transaction: result,
+				},
+			},
 		};
 	}
 
