@@ -3,6 +3,7 @@ import { INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflo
 import { TextEncoder, TextDecoder } from 'util';
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
+import { validateEndpoint } from '../Wax/resources/util';
 
 export class WaxTransferNft implements INodeType {
 	description: INodeTypeDescription = {
@@ -72,7 +73,8 @@ export class WaxTransferNft implements INodeType {
 
 			const to = this.getNodeParameter('to', i) as string;
 			const memo = this.getNodeParameter('memo', i) as string;
-			const endpoint = this.getNodeParameter('endpoint', i) as string;
+			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
+			const endpoint = validateEndpoint(this, rawEndpoint, { signing: true });
 			const assetIdsString = this.getNodeParameter('assetIds', i) as string;
 			const contract = this.getNodeParameter('contract', i) as string;
 

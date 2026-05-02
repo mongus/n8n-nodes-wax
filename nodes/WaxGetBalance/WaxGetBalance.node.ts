@@ -6,6 +6,7 @@ import {
 	NodeConnectionType,
 } from 'n8n-workflow';
 import axios from 'axios';
+import { buildUrl, validateEndpoint } from '../Wax/resources/util';
 
 export class WaxGetBalance implements INodeType {
 	description: INodeTypeDescription = {
@@ -60,12 +61,13 @@ export class WaxGetBalance implements INodeType {
 			const account = this.getNodeParameter('account', i) as string;
 			const contract = this.getNodeParameter('contract', i) as string;
 			const symbol = this.getNodeParameter('symbol', i) as string;
-			const endpoint = this.getNodeParameter('endpoint', i) as string;
+			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
+			const endpoint = validateEndpoint(this, rawEndpoint);
 
 			const payload: Record<string, string> = { account, code: contract };
 			if (symbol) payload.symbol = symbol;
 
-			const { data } = await axios.post(`${endpoint}/v1/chain/get_currency_balance`, payload);
+			const { data } = await axios.post(buildUrl(endpoint, '/v1/chain/get_currency_balance'), payload);
 
 			const item = data.find((item: string) => item.endsWith(` ${symbol}`)) ?? `0 ${symbol}`;
 

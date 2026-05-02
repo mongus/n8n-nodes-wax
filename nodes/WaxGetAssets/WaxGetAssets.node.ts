@@ -8,6 +8,7 @@ import {
 } from 'n8n-workflow';
 
 import {WaxJS} from '@waxio/waxjs/dist';
+import { validateEndpoint } from '../Wax/resources/util';
 
 interface WaxAsset {
 	asset_id: string;
@@ -87,7 +88,8 @@ export class WaxGetAssets implements INodeType {
 			const collectionInput = this.getNodeParameter('collection', i) as string;
 			const schemaInput = this.getNodeParameter('schema', i) as string;
 			const code = this.getNodeParameter('code', i) as string;
-			const endpoint = this.getNodeParameter('endpoint', i) as string;
+			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
+			const endpoint = validateEndpoint(this, rawEndpoint);
 
 			// Parse comma-separated values
 			const templateIds = templateIdInput ? templateIdInput.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) : [];

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { getCredentials } from './util';
+import { buildUrl, getCredentials, validateEndpoint } from './util';
 
 // Token resource properties
 export const tokenProperties: INodeProperties[] = [
@@ -135,7 +135,8 @@ export async function executeTokenOperations(
 	i: number,
 ): Promise<{ returnData?: INodeExecutionData, invalidData?: INodeExecutionData }> {
 	const operation = this.getNodeParameter('operation', i) as string;
-	const endpoint = this.getNodeParameter('endpoint', i) as string;
+	const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
+	const endpoint = validateEndpoint(this, rawEndpoint, { signing: operation === 'transferTokens' });
 
 	if (operation === 'getBalance') {
 		const account = this.getNodeParameter('account', i) as string;
@@ -145,7 +146,7 @@ export async function executeTokenOperations(
 		const payload: Record<string, string> = { account, code: contract };
 		if (symbol) payload.symbol = symbol;
 
-		const { data } = await axios.post(`${endpoint}/v1/chain/get_currency_balance`, payload);
+		const { data } = await axios.post(buildUrl(endpoint, '/v1/chain/get_currency_balance'), payload);
 
 		const item = data.find((item: string) => item.endsWith(` ${symbol}`)) ?? `0 ${symbol}`;
 

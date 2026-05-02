@@ -2,7 +2,7 @@ import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationEr
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { getCredentials } from './util';
+import { getCredentials, validateEndpoint } from './util';
 import { WaxJS } from '@waxio/waxjs/dist';
 import { WaxAsset } from './common';
 
@@ -160,7 +160,8 @@ export async function executeAssetOperations(
 	i: number,
 ): Promise<{ returnData?: INodeExecutionData, invalidData?: INodeExecutionData }> {
 	const operation = this.getNodeParameter('operation', i) as string;
-	const endpoint = this.getNodeParameter('endpoint', i) as string;
+	const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
+	const endpoint = validateEndpoint(this, rawEndpoint, { signing: operation === 'transferAssets' });
 
 	if (operation === 'getAssets') {
 		const account = this.getNodeParameter('account', i) as string;

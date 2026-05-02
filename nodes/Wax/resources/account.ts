@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { getCredentials } from './util';
+import { buildUrl, getCredentials, validateEndpoint } from './util';
 
 // Account resource properties
 export const accountProperties: INodeProperties[] = [
@@ -102,21 +102,23 @@ export async function executeAccountOperations(
 	i: number,
 ): Promise<{ returnData?: INodeExecutionData; invalidData?: INodeExecutionData }> {
 	const operation = this.getNodeParameter('operation', i) as string;
-	const endpoint = this.getNodeParameter('endpoint', i) as string;
+	const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
+	const signing = operation === 'buyRam' || operation === 'stakeCpu' || operation === 'stakeNet';
+	const endpoint = validateEndpoint(this, rawEndpoint, { signing });
 
 	const account = this.getNodeParameter('account', i) as string;
 
 	if (operation === 'getAccountInfo' || operation === 'verifyAccount') {
 		if (operation === 'getAccountInfo') {
 			// Get account info
-			const response = await axios.post(`${endpoint}/v1/chain/get_account`, {
+			const response = await axios.post(buildUrl(endpoint, '/v1/chain/get_account'), {
 				account_name: account,
 			});
 			return { returnData: { json: response.data } };
 		} else if (operation === 'verifyAccount') {
 			try {
 				// Verify address
-				const result = await axios.post(`${endpoint}/v1/chain/get_account`, {
+				const result = await axios.post(buildUrl(endpoint, '/v1/chain/get_account'), {
 					account_name: account,
 				});
 
