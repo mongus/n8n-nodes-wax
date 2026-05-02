@@ -66,6 +66,7 @@
   },
   "dependencies": {
     "@waxio/waxjs": "^0.0.15",
+    "atomicassets": "^1.5.1",
     "axios": "^1.15.0",
     "eosjs": "^22.1.0"
   },
