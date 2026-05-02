@@ -36,6 +36,14 @@ export const commonProperties: INodeProperties[] = [
 				name: 'Asset',
 				value: 'asset',
 			},
+			{
+				name: 'Template',
+				value: 'template',
+			},
+			{
+				name: 'Schema',
+				value: 'schema',
+			},
 		],
 		default: 'account',
 	},
