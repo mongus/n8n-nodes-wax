@@ -6,7 +6,7 @@ import {
 	NodeConnectionType,
 } from 'n8n-workflow';
 import axios from 'axios';
-import { buildUrl, validateEndpoint } from '../Wax/resources/util';
+import { buildUrl, requireAccountName, requireSymbol, validateEndpoint } from '../Wax/resources/util';
 
 export class WaxGetBalance implements INodeType {
 	description: INodeTypeDescription = {
@@ -58,9 +58,10 @@ export class WaxGetBalance implements INodeType {
 		const returnData = [];
 
 		for (let i = 0; i < items.length; i++) {
-			const account = this.getNodeParameter('account', i) as string;
-			const contract = this.getNodeParameter('contract', i) as string;
-			const symbol = this.getNodeParameter('symbol', i) as string;
+			const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
+			const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Token Contract');
+			const rawSymbol = this.getNodeParameter('symbol', i) as string;
+			const symbol = rawSymbol ? requireSymbol(this, rawSymbol, 'Symbol') : '';
 			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
 			const endpoint = validateEndpoint(this, rawEndpoint);
 

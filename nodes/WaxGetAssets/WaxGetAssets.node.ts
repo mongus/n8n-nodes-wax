@@ -8,7 +8,7 @@ import {
 } from 'n8n-workflow';
 
 import {WaxJS} from '@waxio/waxjs/dist';
-import { validateEndpoint } from '../Wax/resources/util';
+import { requireAccountName, validateEndpoint } from '../Wax/resources/util';
 
 interface WaxAsset {
 	asset_id: string;
@@ -83,11 +83,11 @@ export class WaxGetAssets implements INodeType {
 		const returnData = [];
 
 		for (let i = 0; i < items.length; i++) {
-			const account = this.getNodeParameter('account', i) as string;
+			const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
 			const templateIdInput = this.getNodeParameter('templateId', i) as string;
 			const collectionInput = this.getNodeParameter('collection', i) as string;
 			const schemaInput = this.getNodeParameter('schema', i) as string;
-			const code = this.getNodeParameter('code', i) as string;
+			const code = requireAccountName(this, this.getNodeParameter('code', i), 'Code');
 			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
 			const endpoint = validateEndpoint(this, rawEndpoint);
 

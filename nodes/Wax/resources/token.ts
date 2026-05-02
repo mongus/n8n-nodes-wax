@@ -3,7 +3,16 @@ import axios from 'axios';
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { buildUrl, getCredentials, validateEndpoint } from './util';
+import {
+	buildUrl,
+	getCredentials,
+	normalizeMemo,
+	requireAccountName,
+	requireAmount,
+	requirePrecision,
+	requireSymbol,
+	validateEndpoint,
+} from './util';
 
 // Token resource properties
 export const tokenProperties: INodeProperties[] = [
@@ -139,9 +148,10 @@ export async function executeTokenOperations(
 	const endpoint = validateEndpoint(this, rawEndpoint, { signing: operation === 'transferTokens' });
 
 	if (operation === 'getBalance') {
-		const account = this.getNodeParameter('account', i) as string;
-		const contract = this.getNodeParameter('contract', i) as string;
-		const symbol = this.getNodeParameter('symbol', i) as string;
+		const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Token Contract');
+		const rawSymbol = this.getNodeParameter('symbol', i) as string;
+		const symbol = rawSymbol ? requireSymbol(this, rawSymbol, 'Symbol') : '';
 
 		const payload: Record<string, string> = { account, code: contract };
 		if (symbol) payload.symbol = symbol;
@@ -161,15 +171,15 @@ export async function executeTokenOperations(
 		};
 	} else if (operation === 'transferTokens') {
 		const credentials = await getCredentials(this);
-		const from = credentials.account as string;
+		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
 		const key = credentials.privateKey as string;
 
-		const to = this.getNodeParameter('to', i) as string;
-		const amount = this.getNodeParameter('amount', i) as number;
-		const symbol = this.getNodeParameter('symbol', i) as string;
-		const precision = this.getNodeParameter('precision', i) as number || 8; // Default to 8 if not provided
-		const memo = this.getNodeParameter('memo', i) as string;
-		const contract = this.getNodeParameter('contract', i) as string;
+		const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
+		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
+		const symbol = requireSymbol(this, this.getNodeParameter('symbol', i), 'Symbol');
+		const precision = requirePrecision(this, this.getNodeParameter('precision', i), 'Precision');
+		const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Token Contract');
 
 		// Format the quantity as "amount symbol" (e.g., "1.00000000 WAX")
 		// Ensure the amount has 8 decimal places for proper formatting

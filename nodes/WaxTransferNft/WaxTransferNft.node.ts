@@ -3,7 +3,12 @@ import { INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflo
 import { TextEncoder, TextDecoder } from 'util';
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
-import { validateEndpoint } from '../Wax/resources/util';
+import {
+	normalizeMemo,
+	requireAccountName,
+	requireAssetIds,
+	validateEndpoint,
+} from '../Wax/resources/util';
 
 export class WaxTransferNft implements INodeType {
 	description: INodeTypeDescription = {
@@ -68,17 +73,15 @@ export class WaxTransferNft implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			const credentials = await this.getCredentials('waxPrivateKeyApi');
-			const from = credentials.account as string;
+			const from = requireAccountName(this, credentials.account, 'Credential Account Name');
 			const key = credentials.privateKey as string;
 
-			const to = this.getNodeParameter('to', i) as string;
-			const memo = this.getNodeParameter('memo', i) as string;
+			const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
+			const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
 			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
 			const endpoint = validateEndpoint(this, rawEndpoint, { signing: true });
-			const assetIdsString = this.getNodeParameter('assetIds', i) as string;
-			const contract = this.getNodeParameter('contract', i) as string;
-
-			const assetIds = assetIdsString.split(',').map(id => id.trim());
+			const assetIds = requireAssetIds(this, this.getNodeParameter('assetIds', i), 'Asset IDs');
+			const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
 
 			const signatureProvider = new JsSignatureProvider([key]);
 			const rpc = new JsonRpc(endpoint, { fetch });

@@ -2,7 +2,13 @@ import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationEr
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { getCredentials, validateEndpoint } from './util';
+import {
+	getCredentials,
+	normalizeMemo,
+	requireAccountName,
+	requireAssetIds,
+	validateEndpoint,
+} from './util';
 import { WaxJS } from '@waxio/waxjs/dist';
 import { WaxAsset } from './common';
 
@@ -164,11 +170,11 @@ export async function executeAssetOperations(
 	const endpoint = validateEndpoint(this, rawEndpoint, { signing: operation === 'transferAssets' });
 
 	if (operation === 'getAssets') {
-		const account = this.getNodeParameter('account', i) as string;
+		const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
 		const templateIdInput = this.getNodeParameter('templateId', i) as string;
 		const collectionInput = this.getNodeParameter('collection', i) as string;
 		const schemaInput = this.getNodeParameter('schema', i) as string;
-		const code = this.getNodeParameter('code', i) as string;
+		const code = requireAccountName(this, this.getNodeParameter('code', i), 'Code');
 
 		// Parse comma-separated values
 		const templateIds = templateIdInput ? templateIdInput.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) : [];
@@ -238,15 +244,13 @@ export async function executeAssetOperations(
 		};
 	} else if (operation === 'transferAssets') {
 		const credentials = await getCredentials(this);
-		const from = credentials.account as string;
+		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
 		const key = credentials.privateKey as string;
 
-		const to = this.getNodeParameter('to', i) as string;
-		const memo = this.getNodeParameter('memo', i) as string;
-		const assetIdsString = this.getNodeParameter('assetIds', i) as string;
-		const contract = this.getNodeParameter('contract', i) as string;
-
-		const assetIds = assetIdsString.split(',').map(id => id.trim());
+		const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
+		const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
+		const assetIds = requireAssetIds(this, this.getNodeParameter('assetIds', i), 'Asset IDs');
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
 
 		const signatureProvider = new JsSignatureProvider([key]);
 		const rpc = new JsonRpc(endpoint, { fetch });

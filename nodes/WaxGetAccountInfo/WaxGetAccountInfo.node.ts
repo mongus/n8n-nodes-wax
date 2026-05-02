@@ -1,7 +1,7 @@
 import { IExecuteFunctions, INodeTypeDescription, NodeConnectionType } from 'n8n-workflow';
 import { INodeExecutionData, INodeType } from 'n8n-workflow';
 import axios from 'axios';
-import { buildUrl, validateEndpoint } from '../Wax/resources/util';
+import { buildUrl, requireAccountName, validateEndpoint } from '../Wax/resources/util';
 
 export class WaxGetAccountInfo implements INodeType {
 	description: INodeTypeDescription ={
@@ -41,7 +41,7 @@ export class WaxGetAccountInfo implements INodeType {
 		const returnData = [];
 
 		for (let i = 0; i < items.length; i++) {
-			const account = this.getNodeParameter('account', i) as string;
+			const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
 			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
 			const endpoint = validateEndpoint(this, rawEndpoint);
 

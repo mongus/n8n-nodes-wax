@@ -3,7 +3,13 @@ import axios from 'axios';
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { buildUrl, getCredentials, validateEndpoint } from './util';
+import {
+	buildUrl,
+	getCredentials,
+	requireAccountName,
+	requireAmount,
+	validateEndpoint,
+} from './util';
 
 // Account resource properties
 export const accountProperties: INodeProperties[] = [
@@ -106,7 +112,7 @@ export async function executeAccountOperations(
 	const signing = operation === 'buyRam' || operation === 'stakeCpu' || operation === 'stakeNet';
 	const endpoint = validateEndpoint(this, rawEndpoint, { signing });
 
-	const account = this.getNodeParameter('account', i) as string;
+	const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
 
 	if (operation === 'getAccountInfo' || operation === 'verifyAccount') {
 		if (operation === 'getAccountInfo') {
@@ -150,10 +156,10 @@ export async function executeAccountOperations(
 	} else if (operation === 'buyRam' || operation === 'stakeCpu' || operation === 'stakeNet') {
 		// These operations require authentication
 		const credentials = await getCredentials(this);
-		const from = credentials.account as string;
+		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
 
 		// Get operation parameters
-		const amount = this.getNodeParameter('amount', i) as number;
+		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
 
 		let actions: Array<any> = [];
 		let formattedAmount = '';

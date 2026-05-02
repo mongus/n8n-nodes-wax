@@ -1,7 +1,7 @@
 import { IExecuteFunctions, INodeTypeDescription, NodeConnectionType } from 'n8n-workflow';
 import { INodeExecutionData, INodeType } from 'n8n-workflow';
 import axios from 'axios';
-import { buildUrl, validateEndpoint } from '../Wax/resources/util';
+import { buildUrl, requireAccountName, validateEndpoint } from '../Wax/resources/util';
 
 export class WaxVerifyAddress implements INodeType {
 	description: INodeTypeDescription = {
@@ -43,9 +43,21 @@ export class WaxVerifyAddress implements INodeType {
 		const invalidData = [];
 
 		for (let i = 0; i < items.length; i++) {
-			const account = this.getNodeParameter('account', i) as string;
+			const rawAccount = this.getNodeParameter('account', i) as string;
 			const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
 			const endpoint = validateEndpoint(this, rawEndpoint);
+			let account: string;
+			try {
+				account = requireAccountName(this, rawAccount, 'Account Name');
+			} catch {
+				invalidData.push({
+					json: {
+						account: rawAccount,
+						message: 'Account name is not a valid WAX account name',
+					},
+				});
+				continue;
+			}
 
 			try {
 				// Try to get the account info
