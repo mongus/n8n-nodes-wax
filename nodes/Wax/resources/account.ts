@@ -6,6 +6,7 @@ import { TextEncoder, TextDecoder } from 'util';
 import {
 	buildUrl,
 	getCredentials,
+	redactSensitive,
 	requireAccountName,
 	requireAmount,
 	validateEndpoint,
@@ -150,7 +151,7 @@ export async function executeAccountOperations(
 					}; // Account does not exist
 				}
 
-				throw new Error(`Failed to verify account: ${error.message}`);
+				throw new Error(`Failed to verify account: ${redactSensitive(error.message)}`);
 			}
 		}
 	} else if (operation === 'buyRam' || operation === 'stakeCpu' || operation === 'stakeNet') {
@@ -235,7 +236,7 @@ export async function executeAccountOperations(
 				}
 			};
 		} catch (error) {
-			throw new Error(`Failed to execute ${operation}: ${error.message}`);
+			throw new Error(`Failed to execute ${operation}: ${redactSensitive(error.message)}`);
 		}
 	}
 

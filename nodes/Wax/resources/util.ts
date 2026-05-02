@@ -197,3 +197,30 @@ export function normalizeMemo(
 	}
 	return memo;
 }
+
+const REDACT_PATTERNS: RegExp[] = [
+	/\b5[1-9A-HJ-NP-Za-km-z]{50}\b/g,
+	/\bPVT_[A-Z0-9]+_[1-9A-HJ-NP-Za-km-z]+/g,
+	/\bEOS[1-9A-HJ-NP-Za-km-z]{50}\b/g,
+	/\bPUB_[A-Z0-9]+_[1-9A-HJ-NP-Za-km-z]+/g,
+	/\bSIG_[A-Z0-9]+_[1-9A-HJ-NP-Za-km-z]+/g,
+	/\b[a-f0-9]{64,}\b/gi,
+];
+
+export function redactSensitive(input: string): string {
+	let out = input;
+	for (const re of REDACT_PATTERNS) {
+		out = out.replace(re, '[REDACTED]');
+	}
+	return out;
+}
+
+export function safeError(error: unknown): { message: string } {
+	if (error instanceof Error) {
+		return { message: redactSensitive(error.message) };
+	}
+	if (typeof error === 'string') {
+		return { message: redactSensitive(error) };
+	}
+	return { message: 'Unknown error' };
+}

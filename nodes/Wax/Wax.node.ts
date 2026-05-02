@@ -7,6 +7,7 @@ import {
 } from 'n8n-workflow';
 
 import { properties, executeOperation } from './resources';
+import { safeError } from './resources/util';
 
 const subtitle = `={{ ( { ${Object.entries(properties.reduce((acc, prop) => {
 	if (prop.name === 'operation') {
@@ -62,7 +63,7 @@ export class Wax implements INodeType {
 				// We no longer use invalidData as everything goes through returnData
 			} catch (error) {
 				if (this.continueOnFail()) {
-					returnData.push({ json: { error: error.message } });
+					returnData.push({ json: { error: safeError(error).message } });
 					continue;
 				}
 				throw error;

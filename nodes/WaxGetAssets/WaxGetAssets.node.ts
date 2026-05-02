@@ -143,9 +143,6 @@ export class WaxGetAssets implements INodeType {
 							schema_name: asset.schema_name,
 						});
 					});
-				} else {
-					// If rows is not an array, log the issue but continue
-					console.log(`Warning: result.rows is not an array: ${JSON.stringify(result.rows)}`);
 				}
 			} while (result.more && result.rows);
 
