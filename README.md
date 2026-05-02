@@ -25,6 +25,9 @@ This node package provides the following operations for interacting with the WAX
 - **Get Account Info**: Fetch detailed account information from the WAX blockchain
 - **Get Assets**: Retrieve NFT assets owned by an account, with optional filtering by template ID, collection, or schema
 - **Get Account Token Balance**: Get token balance for an account
+- **Mint Asset**: Mint a new AtomicAssets NFT from an existing template
+- **Create Template**: Create a new AtomicAssets template under a collection and schema
+- **Get Schema Format**: Retrieve a schema's field definitions (useful for discovering what to put in Immutable/Mutable Data when minting)
 - **Transfer Assets**: Transfer NFT assets from one account to another
 - **Transfer Tokens**: Transfer tokens (e.g., WAX) from one account to another
 - **Verify Account**: Verify if an account exists on the WAX blockchain
@@ -92,6 +95,26 @@ When using Transfer Assets operation, you'll need to provide:
 - Contract (defaults to "atomicassets")
 
 You can use the Get Assets operation to find the asset IDs of NFTs owned by an account.
+
+### Minting NFTs
+
+Both **Mint Asset** and **Create Template** operate on the AtomicAssets contract and require the credential's account to be in the target collection's `authorized_accounts` list. If it isn't, the node fails fast with a clear error before any signature is produced - the collection's author can add it via `atomicassets::addcolauth`.
+
+**Create Template** registers a new template in a collection under a specific schema. You provide:
+- Collection Name
+- Schema Name
+- Transferable / Burnable flags
+- Max Supply (`0` = unlimited)
+- Immutable Data: a JSON object whose keys/types match the schema's format (e.g., `{"name":"Sword","power":42}`)
+
+**Mint Asset** mints one NFT from an existing template. You provide:
+- Collection Name
+- Template ID (the schema is derived from the template - no need to specify it twice)
+- New Asset Owner (recipient account)
+- Optional Immutable Data Override / Mutable Data (JSON, validated against the schema)
+- Optional **Back with Assets**: comma-separated EOSIO asset strings (e.g., `1.00000000 WAX`) to back the new NFT with
+
+If you don't know what fields the schema expects, run **Get Schema Format** first - it returns the schema's field definitions so you know what keys/types to put in the Data fields.
 
 ### Token Operations
 
