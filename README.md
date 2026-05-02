@@ -49,6 +49,32 @@ For read-only operations, no credentials are required, but you'll need to specif
 
 This node requires n8n version 1.0.0 or later.
 
+## Security considerations
+
+The credential's private key gives **full control of the WAX account**. The
+nodes are designed to keep the key inside n8n's credential store, but a few
+configuration choices materially affect that:
+
+- **API Endpoint.** Signed transactions are broadcast through the endpoint you
+  configure. Pointing it at an attacker-controlled RPC node lets that node see
+  every signed transaction this account produces. The nodes validate the URL
+  shape (rejects raw IPs, embedded credentials, and known cloud-metadata
+  hostnames) and require `https://` for any operation that signs, but they do
+  **not** resolve DNS to verify the IP — DNS-rebinding to an internal address
+  is possible for a determined attacker. Only use trusted RPC endpoints.
+- **Token Contract / Contract field.** For Transfer Tokens and Transfer Assets,
+  the `Contract` parameter is the EOSIO contract whose `transfer` action gets
+  signed under your `active` permission. If you bind this field to upstream
+  data (via an n8n expression sourced from outside the workflow), an attacker
+  who can influence that data can swap `eosio.token` for an arbitrary contract
+  whose `transfer` action does something destructive. **Pin this field to a
+  literal value** (e.g., `eosio.token`, `atomicassets`) unless you fully trust
+  the upstream source.
+- **continueOnFail output.** When the node is configured with "Continue On
+  Fail", error messages are sanitized to redact strings that look like keys or
+  signatures, but you should still treat any error blob as untrusted before
+  forwarding it to a downstream system (Slack, email, etc.).
+
 ## Usage
 
 ### API Endpoints
