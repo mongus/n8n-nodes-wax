@@ -70,6 +70,12 @@
     "axios": "^1.15.0",
     "eosjs": "^22.1.0"
   },
+  "bundleDependencies": [
+    "@waxio/waxjs",
+    "atomicassets",
+    "axios",
+    "eosjs"
+  ],
   "overrides": {
     "elliptic": "^6.6.1",
     "bn.js": "^5.2.2",
