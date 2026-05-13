@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-wax",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "n8n Community Node Package for the WAX Blockchain",
   "keywords": [
     "n8n",
