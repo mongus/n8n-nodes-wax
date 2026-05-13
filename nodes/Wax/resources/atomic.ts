@@ -1,13 +1,55 @@
 import { IExecuteFunctions, NodeOperationError } from 'n8n-workflow';
-import RpcApi from 'atomicassets/build/API/Rpc';
-import { toAttributeMap, AttributeMap, Format } from 'atomicassets/build/Actions/Generator';
+import type RpcApi from 'atomicassets/build/API/Rpc';
+import type { ActionGenerator, AttributeMap, Format } from 'atomicassets/build/Actions/Generator';
+
+export type { RpcApi, ActionGenerator, AttributeMap, Format };
 
 export const ATOMIC_CONTRACT = 'atomicassets';
 
+const ATOMICASSETS_MISSING_MESSAGE =
+	'AtomicAssets support is not installed. Reinstall n8n-nodes-wax from Settings → Community Nodes (and reload n8n if needed) to use Mint Asset / Create Template / Get Schema Format.';
+
 const ASSET_STRING_RE = /^\d+(?:\.\d+)?\s+[A-Z]{1,7}$/;
 
-export function createAtomicRpc(endpoint: string, contract = ATOMIC_CONTRACT): RpcApi {
-	return new RpcApi(endpoint, contract, { fetch: fetch as never });
+type RpcApiCtor = new (endpoint: string, contract: string, opts: { fetch?: unknown }) => RpcApi;
+type ActionGeneratorCtor = new (contract: string) => ActionGenerator;
+type GeneratorMod = {
+	ActionGenerator: ActionGeneratorCtor;
+	toAttributeMap: (obj: Record<string, unknown>, format: Format[]) => AttributeMap;
+};
+
+function loadRpcCtor(context: IExecuteFunctions): RpcApiCtor {
+	try {
+		const mod = require('atomicassets/build/API/Rpc');
+		return (mod?.default ?? mod) as RpcApiCtor;
+	} catch {
+		throw new NodeOperationError(context.getNode(), ATOMICASSETS_MISSING_MESSAGE);
+	}
+}
+
+function loadGeneratorMod(context: IExecuteFunctions): GeneratorMod {
+	try {
+		return require('atomicassets/build/Actions/Generator') as GeneratorMod;
+	} catch {
+		throw new NodeOperationError(context.getNode(), ATOMICASSETS_MISSING_MESSAGE);
+	}
+}
+
+export function createAtomicRpc(
+	context: IExecuteFunctions,
+	endpoint: string,
+	contract = ATOMIC_CONTRACT,
+): RpcApi {
+	const Ctor = loadRpcCtor(context);
+	return new Ctor(endpoint, contract, { fetch: fetch as never });
+}
+
+export function createActionGenerator(
+	context: IExecuteFunctions,
+	contract: string,
+): ActionGenerator {
+	const { ActionGenerator: Ctor } = loadGeneratorMod(context);
+	return new Ctor(contract);
 }
 
 export async function ensureAuthorized(
@@ -117,6 +159,7 @@ export function buildAttributeMap(
 		}
 	}
 
+	const { toAttributeMap } = loadGeneratorMod(context);
 	try {
 		return toAttributeMap(plain, format);
 	} catch (error) {

@@ -2,10 +2,9 @@ import { IExecuteFunctions, INodeExecutionData, INodeProperties } from 'n8n-work
 import { Api, JsonRpc } from 'eosjs';
 import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import { TextEncoder, TextDecoder } from 'util';
-import { ActionGenerator } from 'atomicassets/build/Actions/Generator';
-
 import {
 	buildAttributeMap,
+	createActionGenerator,
 	createAtomicRpc,
 	ensureAuthorized,
 	fetchSchemaFormat,
@@ -156,7 +155,7 @@ export async function executeTemplateOperations(
 		const maxSupply = requireMaxSupply(this, this.getNodeParameter('maxSupply', i), 'Max Supply');
 		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
 
-		const atomicRpc = createAtomicRpc(endpoint, contract);
+		const atomicRpc = createAtomicRpc(this, endpoint, contract);
 		await ensureAuthorized(this, atomicRpc, collectionName, from);
 		const format = await fetchSchemaFormat(this, atomicRpc, collectionName, schemaName);
 		const immutableData = buildAttributeMap(
@@ -166,7 +165,7 @@ export async function executeTemplateOperations(
 			'Immutable Data',
 		);
 
-		const generator = new ActionGenerator(contract);
+		const generator = createActionGenerator(this, contract);
 		const actions = await generator.createtempl(
 			[{ actor: from, permission: 'active' }],
 			from,

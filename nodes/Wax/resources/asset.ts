@@ -10,9 +10,9 @@ import {
 	requireAssetIds,
 	validateEndpoint,
 } from './util';
-import { ActionGenerator } from 'atomicassets/build/Actions/Generator';
 import {
 	buildAttributeMap,
+	createActionGenerator,
 	createAtomicRpc,
 	ensureAuthorized,
 	ensureTemplateExists,
@@ -428,7 +428,7 @@ export async function executeAssetOperations(
 			'Contract',
 		);
 
-		const atomicRpc = createAtomicRpc(endpoint, contract);
+		const atomicRpc = createAtomicRpc(this, endpoint, contract);
 		await ensureAuthorized(this, atomicRpc, collectionName, from);
 		const { schema_name: schemaName } = await ensureTemplateExists(
 			this,
@@ -456,7 +456,7 @@ export async function executeAssetOperations(
 			'Back with Assets',
 		);
 
-		const generator = new ActionGenerator(contract);
+		const generator = createActionGenerator(this, contract);
 		const actions = await generator.mintasset(
 			[{ actor: from, permission: 'active' }],
 			from,

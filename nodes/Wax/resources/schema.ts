@@ -74,7 +74,7 @@ export async function executeSchemaOperations(
 			'Schema Name',
 		);
 
-		const rpc = createAtomicRpc(endpoint);
+		const rpc = createAtomicRpc(this, endpoint);
 		const format = await fetchSchemaFormat(this, rpc, collectionName, schemaName);
 
 		return {
