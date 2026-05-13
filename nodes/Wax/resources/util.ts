@@ -77,7 +77,7 @@ export function validateEndpoint(
 		throw new NodeOperationError(node, `API Endpoint must use a hostname, not an IP address`);
 	}
 
-	return url.toString();
+	return url.toString().replace(/\/+$/, '');
 }
 
 export function buildUrl(endpoint: string, path: string): string {
