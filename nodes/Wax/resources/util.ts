@@ -113,8 +113,11 @@ export function requireAccountName(
 			`${field} must contain only lowercase letters a-z, digits 1-5, and dots`,
 		);
 	}
-	if (name.startsWith('.') || name.endsWith('.')) {
-		throw new NodeOperationError(node, `${field} must not start or end with a dot`);
+	// Antelope name encoding treats '.' as symbol value 0, so leading dots are
+	// valid (e.g. WAX Cloud Wallet names like ".lgbs.wam"). Only an all-dot
+	// string is meaningless - it encodes to the null/empty name.
+	if (!/[a-z1-5]/.test(name)) {
+		throw new NodeOperationError(node, `${field} must contain at least one letter or digit`);
 	}
 	return name;
 }
