@@ -30,6 +30,8 @@ This node package provides the following operations for interacting with the WAX
 - **Get Schema Format**: Retrieve a schema's field definitions (useful for discovering what to put in Immutable/Mutable Data when minting)
 - **Transfer Assets**: Transfer NFT assets from one account to another
 - **Transfer Tokens**: Transfer tokens (e.g., WAX) from one account to another
+- **Issue Tokens**: Issue new tokens into circulation (requires the issuer account's key)
+- **Retire Tokens**: Burn tokens from the issuer balance, reducing supply (requires the issuer account's key)
 - **Verify Account**: Verify if an account exists on the WAX blockchain
 - **Buy RAM**: Purchase RAM resources for an account on the WAX blockchain
 - **Stake CPU**: Stake WAX tokens for CPU resources on the blockchain
@@ -37,7 +39,7 @@ This node package provides the following operations for interacting with the WAX
 
 ## Credentials
 
-For operations that require signing transactions (Transfer Tokens, Transfer Assets, Buy RAM, Stake CPU, and Stake NET), you'll need to provide:
+For operations that require signing transactions (Transfer Tokens, Issue Tokens, Retire Tokens, Transfer Assets, Buy RAM, Stake CPU, and Stake NET), you'll need to provide:
 
 - **Account Name**: Your WAX account name
 - **Private Key**: The private key associated with your WAX account
@@ -118,10 +120,20 @@ If you don't know what fields the schema expects, run **Get Schema Format** firs
 
 ### Token Operations
 
-For Transfer Tokens and Get Account Token Balance operations, you can specify:
+For Transfer Tokens, Issue Tokens, Retire Tokens, and Get Account Token Balance operations, you can specify:
 - Token contract (defaults to "eosio.token" for WAX)
 - Token symbol (defaults to "WAX")
 - Precision (number of decimal places, defaults to 8)
+
+**Precision must match the token exactly.** The chain asserts on symbol precision, so
+a token like Warsaken's LOOT (contract `warsaken`, precision 4) fails with a symbol
+precision mismatch if left at the default of 8. Check a token's precision with
+`get_currency_stats`.
+
+Issue Tokens and Retire Tokens act on token supply and are authorized by the credential
+account, which must be the token's `issuer`. Most `eosio.token`-derived contracts only
+allow issuing to the issuer itself; send the newly issued tokens onward with a separate
+Transfer Tokens step.
 
 ### Resource Management Operations
 

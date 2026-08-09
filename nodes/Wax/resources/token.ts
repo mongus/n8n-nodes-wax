@@ -38,6 +38,18 @@ export const tokenProperties: INodeProperties[] = [
 				description: 'Transfer tokens to another account',
 				action: 'Transfer tokens to another account',
 			},
+			{
+				name: 'Issue Tokens',
+				value: 'issueTokens',
+				description: 'Issue new tokens into circulation. Requires the issuer account key.',
+				action: 'Issue new tokens',
+			},
+			{
+				name: 'Retire Tokens',
+				value: 'retireTokens',
+				description: 'Burn tokens from the issuer balance, reducing supply. Requires the issuer account key.',
+				action: 'Retire tokens from circulation',
+			},
 		],
 		default: 'getBalance',
 	},
@@ -64,7 +76,7 @@ export const tokenProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['token'],
-				operation: ['getBalance', 'transferTokens'],
+				operation: ['getBalance', 'transferTokens', 'issueTokens', 'retireTokens'],
 			},
 		},
 		description: 'Token contract (e.g., "eosio.token" for WAX)',
@@ -77,7 +89,7 @@ export const tokenProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['token'],
-				operation: ['getBalance', 'transferTokens'],
+				operation: ['getBalance', 'transferTokens', 'issueTokens', 'retireTokens'],
 			},
 		},
 		description: 'Token symbol (e.g., "WAX")',
@@ -92,9 +104,11 @@ export const tokenProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['token'],
-				operation: ['transferTokens'],
+				operation: ['transferTokens', 'issueTokens'],
 			},
 		},
+		description:
+			'Recipient account. Most eosio.token contracts only allow issuing to the issuer itself, so for Issue Tokens this is usually the credential account.',
 	},
 	{
 		displayName: 'Amount',
@@ -105,7 +119,7 @@ export const tokenProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['token'],
-				operation: ['transferTokens'],
+				operation: ['transferTokens', 'issueTokens', 'retireTokens'],
 			},
 		},
 		description: 'Amount of tokens to transfer (e.g., 1)',
@@ -118,7 +132,7 @@ export const tokenProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['token'],
-				operation: ['transferTokens'],
+				operation: ['transferTokens', 'issueTokens', 'retireTokens'],
 			},
 		},
 		description: 'Number of decimal places for the token (default is 8)',
@@ -131,11 +145,27 @@ export const tokenProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['token'],
-				operation: ['transferTokens'],
+				operation: ['transferTokens', 'issueTokens', 'retireTokens'],
 			},
 		},
 	},
 ];
+
+const SIGNING_OPERATIONS = new Set(['transferTokens', 'issueTokens', 'retireTokens']);
+
+// Format an amount as an EOSIO asset string (e.g. "1.00000000 WAX"). The chain
+// asserts on exact symbol precision, so a mismatch here is rejected at transact
+// time rather than caught locally.
+function formatQuantity(amount: number, precision: number, symbol: string): string {
+	return `${amount.toFixed(precision)} ${symbol}`;
+}
+
+function createSigningApi(endpoint: string, key: string): Api {
+	const signatureProvider = new JsSignatureProvider([key]);
+	const rpc = new JsonRpc(endpoint, { fetch });
+
+	return new Api({ rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder() });
+}
 
 // Token operations execution
 export async function executeTokenOperations(
@@ -145,7 +175,7 @@ export async function executeTokenOperations(
 ): Promise<{ returnData?: INodeExecutionData, invalidData?: INodeExecutionData }> {
 	const operation = this.getNodeParameter('operation', i) as string;
 	const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
-	const endpoint = validateEndpoint(this, rawEndpoint, { signing: operation === 'transferTokens' });
+	const endpoint = validateEndpoint(this, rawEndpoint, { signing: SIGNING_OPERATIONS.has(operation) });
 
 	if (operation === 'getBalance') {
 		const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
@@ -181,15 +211,9 @@ export async function executeTokenOperations(
 		const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
 		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Token Contract');
 
-		// Format the quantity as "amount symbol" (e.g., "1.00000000 WAX")
-		// Ensure the amount has 8 decimal places for proper formatting
-		const formattedAmount = amount.toFixed(precision);
-		const quantity = `${formattedAmount} ${symbol}`;
+		const quantity = formatQuantity(amount, precision, symbol);
 
-		const signatureProvider = new JsSignatureProvider([key]);
-		const rpc = new JsonRpc(endpoint, { fetch });
-
-		const api = new Api({ rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder() });
+		const api = createSigningApi(endpoint, key);
 
 		const actions = [{
 			account: contract,
@@ -198,6 +222,82 @@ export async function executeTokenOperations(
 			data: {
 				from,
 				to,
+				quantity,
+				memo,
+			}
+		}];
+
+		const result = await api.transact({
+			actions
+		}, {
+			blocksBehind: 3,
+			expireSeconds: 30,
+		});
+
+		return {
+			returnData: {
+				json: { result }
+			}
+		};
+	} else if (operation === 'issueTokens') {
+		const credentials = await getCredentials(this);
+		const issuer = requireAccountName(this, credentials.account, 'Credential Account Name');
+		const key = credentials.privateKey as string;
+
+		const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
+		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
+		const symbol = requireSymbol(this, this.getNodeParameter('symbol', i), 'Symbol');
+		const precision = requirePrecision(this, this.getNodeParameter('precision', i), 'Precision');
+		const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Token Contract');
+
+		const quantity = formatQuantity(amount, precision, symbol);
+
+		const api = createSigningApi(endpoint, key);
+
+		const actions = [{
+			account: contract,
+			name: 'issue',
+			authorization: [{ actor: issuer, permission: 'active' }],
+			data: {
+				to,
+				quantity,
+				memo,
+			}
+		}];
+
+		const result = await api.transact({
+			actions
+		}, {
+			blocksBehind: 3,
+			expireSeconds: 30,
+		});
+
+		return {
+			returnData: {
+				json: { result }
+			}
+		};
+	} else if (operation === 'retireTokens') {
+		const credentials = await getCredentials(this);
+		const issuer = requireAccountName(this, credentials.account, 'Credential Account Name');
+		const key = credentials.privateKey as string;
+
+		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
+		const symbol = requireSymbol(this, this.getNodeParameter('symbol', i), 'Symbol');
+		const precision = requirePrecision(this, this.getNodeParameter('precision', i), 'Precision');
+		const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Token Contract');
+
+		const quantity = formatQuantity(amount, precision, symbol);
+
+		const api = createSigningApi(endpoint, key);
+
+		const actions = [{
+			account: contract,
+			name: 'retire',
+			authorization: [{ actor: issuer, permission: 'active' }],
+			data: {
 				quantity,
 				memo,
 			}
