@@ -1,9 +1,7 @@
 import { IExecuteFunctions, INodeExecutionData, INodeProperties } from 'n8n-workflow';
 import axios from 'axios';
-import { Api, JsonRpc } from 'eosjs';
-import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
-import { TextEncoder, TextDecoder } from 'util';
 import {
+	createSigningApi,
 	buildUrl,
 	getCredentials,
 	normalizeMemo,
@@ -160,13 +158,6 @@ function formatQuantity(amount: number, precision: number, symbol: string): stri
 	return `${amount.toFixed(precision)} ${symbol}`;
 }
 
-function createSigningApi(endpoint: string, key: string): Api {
-	const signatureProvider = new JsSignatureProvider([key]);
-	const rpc = new JsonRpc(endpoint, { fetch });
-
-	return new Api({ rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder() });
-}
-
 // Token operations execution
 export async function executeTokenOperations(
 	this: IExecuteFunctions,
@@ -202,7 +193,6 @@ export async function executeTokenOperations(
 	} else if (operation === 'transferTokens') {
 		const credentials = await getCredentials(this);
 		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
-		const key = credentials.privateKey as string;
 
 		const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
 		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
@@ -213,7 +203,7 @@ export async function executeTokenOperations(
 
 		const quantity = formatQuantity(amount, precision, symbol);
 
-		const api = createSigningApi(endpoint, key);
+		const api = await createSigningApi(this, endpoint, credentials);
 
 		const actions = [{
 			account: contract,
@@ -242,7 +232,6 @@ export async function executeTokenOperations(
 	} else if (operation === 'issueTokens') {
 		const credentials = await getCredentials(this);
 		const issuer = requireAccountName(this, credentials.account, 'Credential Account Name');
-		const key = credentials.privateKey as string;
 
 		const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
 		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
@@ -253,7 +242,7 @@ export async function executeTokenOperations(
 
 		const quantity = formatQuantity(amount, precision, symbol);
 
-		const api = createSigningApi(endpoint, key);
+		const api = await createSigningApi(this, endpoint, credentials);
 
 		const actions = [{
 			account: contract,
@@ -281,7 +270,6 @@ export async function executeTokenOperations(
 	} else if (operation === 'retireTokens') {
 		const credentials = await getCredentials(this);
 		const issuer = requireAccountName(this, credentials.account, 'Credential Account Name');
-		const key = credentials.privateKey as string;
 
 		const amount = requireAmount(this, this.getNodeParameter('amount', i), 'Amount');
 		const symbol = requireSymbol(this, this.getNodeParameter('symbol', i), 'Symbol');
@@ -291,7 +279,7 @@ export async function executeTokenOperations(
 
 		const quantity = formatQuantity(amount, precision, symbol);
 
-		const api = createSigningApi(endpoint, key);
+		const api = await createSigningApi(this, endpoint, credentials);
 
 		const actions = [{
 			account: contract,

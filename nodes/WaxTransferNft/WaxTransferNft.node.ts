@@ -1,9 +1,7 @@
 import { IExecuteFunctions, NodeConnectionType } from 'n8n-workflow';
 import { INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
-import { TextEncoder, TextDecoder } from 'util';
-import { Api, JsonRpc } from 'eosjs';
-import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
 import {
+	createSigningApi,
 	normalizeMemo,
 	requireAccountName,
 	requireAssetIds,
@@ -74,7 +72,6 @@ export class WaxTransferNft implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			const credentials = await this.getCredentials('waxPrivateKeyApi');
 			const from = requireAccountName(this, credentials.account, 'Credential Account Name');
-			const key = credentials.privateKey as string;
 
 			const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
 			const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
@@ -83,10 +80,7 @@ export class WaxTransferNft implements INodeType {
 			const assetIds = requireAssetIds(this, this.getNodeParameter('assetIds', i), 'Asset IDs');
 			const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
 
-			const signatureProvider = new JsSignatureProvider([key]);
-			const rpc = new JsonRpc(endpoint, { fetch });
-
-			const api = new Api({ rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder() });
+			const api = await createSigningApi(this, endpoint, credentials);
 
 			const actions = [{
 				account: contract,
