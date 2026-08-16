@@ -1,4 +1,4 @@
-import { IExecuteFunctions, NodeConnectionType } from 'n8n-workflow';
+import { IExecuteFunctions, NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 import { INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
 import {
 	createSigningApi,
@@ -6,6 +6,7 @@ import {
 	requireAccountName,
 	requireAssetIds,
 	validateEndpoint,
+	redactSensitive,
 } from '../Wax/resources/util';
 
 export class WaxTransferNft implements INodeType {
@@ -70,6 +71,7 @@ export class WaxTransferNft implements INodeType {
 		const returnData: INodeExecutionData[] = [];
 
 		for (let i = 0; i < items.length; i++) {
+			try {
 			const credentials = await this.getCredentials('waxPrivateKeyApi');
 			const from = requireAccountName(this, credentials.account, 'Credential Account Name');
 
@@ -101,7 +103,24 @@ export class WaxTransferNft implements INodeType {
 				expireSeconds: 30,
 			});
 
-			returnData.push({ json: { result } });
+				returnData.push({ json: { result }, pairedItem: { item: i } });
+			} catch (error) {
+				// Transfers already broadcast in this run are irreversible. Throwing
+				// without them meant their transaction ids were discarded with the
+				// error, and a workflow retried from the start re-sent them -- real
+				// assets moved twice. The successes are returned either way; the
+				// error is attached to the item that failed.
+				const message = redactSensitive(error instanceof Error ? error.message : String(error));
+				if (this.continueOnFail()) {
+					returnData.push({ json: { error: message }, pairedItem: { item: i } });
+					continue;
+				}
+				throw new NodeOperationError(
+					this.getNode(),
+					`${message} (${returnData.length} transfer(s) already sent in this run and reported below -- do not simply retry)`,
+					{ itemIndex: i },
+				);
+			}
 		}
 
 		return [returnData];

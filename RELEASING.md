@@ -47,10 +47,21 @@ expecting a different one.
 It is the widest-reaching thing in this package and has no tests. Anything
 touching it warrants reading the diff rather than the description.
 
-**Adding a signing operation means adding it to `SIGNING_OPERATIONS`.** The set
-lives in `nodes/Wax/resources/account.ts` with a comment saying exactly this,
-and being absent from it is silent: the operation works, and enforces neither
-https nor the chain guard.
+**Adding a signing operation means telling https enforcement about it — and
+there are four separate places that decide, not one.**
+
+| File | How it decides |
+|---|---|
+| `nodes/Wax/resources/account.ts` | a `SIGNING_OPERATIONS` set |
+| `nodes/Wax/resources/token.ts` | a *second*, separate `SIGNING_OPERATIONS` set |
+| `nodes/Wax/resources/asset.ts` | an inline `operation === …` boolean |
+| `nodes/Wax/resources/template.ts` | hardcoded `signing: true` |
+
+Getting this wrong is quiet: the operation still works and still runs the chain
+guard — that lives in `createSigningApi` and applies to anything that signs —
+but https is no longer enforced on its endpoint. An earlier version of this file
+named only `account.ts`, which would have sent someone adding a token operation
+to edit the wrong file entirely.
 
 ## Publishing
 

@@ -45,14 +45,20 @@ For operations that sign transactions, you'll need to provide:
 
 - **Account Name**: Your WAX account name
 - **Private Key**: The private key associated with your WAX account
-- **Chain**: `mainnet` or `testnet`
+- **Network**: `WAX Mainnet`, `WAX Testnet`, `Custom Chain`, or `Not Set`
 
-**Set the chain.** Every signing operation verifies that the endpoint it was
-given actually serves the chain the credential names, and refuses if it does
-not. Without it, a testnet endpoint left in a workflow signs real transactions
-against mainnet — or the reverse, which looks like nothing happening at all.
-Existing credentials default to `unset`, which skips the check and preserves
-the previous behaviour, so upgrading breaks nothing; set it deliberately.
+**Set the network. It defaults to `Not Set`, which performs no check** — on new
+credentials as well as upgraded ones. That default exists so upgrading cannot
+break a working workflow, but it means the guard protects nothing until you
+choose a network.
+
+With a network set, every signing operation verifies that the endpoint actually
+serves that chain and refuses otherwise. Without it, a testnet endpoint left in
+a workflow signs real transactions against mainnet — or the reverse, which
+looks like nothing happening at all.
+
+`Custom Chain` with an empty **Expected Chain ID** is also no check. If you pick
+custom, fill the ID in.
 
 To obtain a WAX account and private key:
 1. Create a WAX account through services like [WAX Cloud Wallet](https://wallet.wax.io/)
@@ -77,6 +83,13 @@ signed. Leave Actor empty to sign as the credential's own account.
 This node requires n8n version 1.0.0 or later.
 
 ## Security considerations
+
+**A hostile RPC endpoint can change what you sign, not merely observe it.**
+Contract ABIs are fetched from the same endpoint at signing time, and only the
+chain ID is pinned. An endpoint that answers honestly about the chain but serves
+a doctored ABI — swapping a transfer's `from` and `to`, say — makes this node
+serialize and sign bytes that mean something different on chain. Nothing here
+can detect that. "Use a trusted endpoint" is a hard requirement, not advice.
 
 The credential's private key gives **full control of the WAX account**. The
 nodes are designed to keep the key inside n8n's credential store, but a few

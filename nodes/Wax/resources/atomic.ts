@@ -1,4 +1,5 @@
 import { IExecuteFunctions, NodeOperationError } from 'n8n-workflow';
+import { redactSensitive } from './util';
 import type RpcApi from 'atomicassets/build/API/Rpc';
 import type { ActionGenerator, AttributeMap, Format } from 'atomicassets/build/Actions/Generator';
 
@@ -62,7 +63,19 @@ export async function ensureAuthorized(
 	try {
 		const collection = await rpc.getCollection(collectionName);
 		authorized = await collection.authorizedAccounts();
-	} catch {
+	} catch (error) {
+		// "Not found" is a claim about the chain. A timeout, a 500 or a DNS
+		// failure is a failure to look, and reporting the two identically makes a
+		// workflow that branches on absence -- "template missing, so create it" --
+		// take the wrong path during an endpoint blip.
+		const status = (error as any)?.response?.status;
+		if (status && status !== 404) {
+			throw new NodeOperationError(
+				context.getNode(),
+				`could not check collection "${collectionName}": ${redactSensitive(
+					error instanceof Error ? error.message : String(error))}`,
+			);
+		}
 		throw new NodeOperationError(
 			context.getNode(),
 			`Collection "${collectionName}" not found`,

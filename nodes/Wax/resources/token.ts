@@ -1,4 +1,4 @@
-import { IExecuteFunctions, INodeExecutionData, INodeProperties } from 'n8n-workflow';
+import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationError } from 'n8n-workflow';
 import axios from 'axios';
 import {
 	createSigningApi,
@@ -179,6 +179,16 @@ export async function executeTokenOperations(
 
 		const { data } = await axios.post(buildUrl(endpoint, '/v1/chain/get_currency_balance'), payload);
 
+		// With no symbol the API returns every balance, and matching on a lone
+		// trailing space found none -- so a cleared symbol reported a balance of
+		// zero rather than an error, and a workflow gating on "balance >= X" read
+		// an unknown as an empty account.
+		if (!symbol) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Symbol is required to read a balance. Without it the account may hold several, and there is no single number to report.',
+			);
+		}
 		const item = data.find((item: string) => item.endsWith(` ${symbol}`)) ?? `0 ${symbol}`;
 
 		const [_balance, _symbol] = item.split(' ');
