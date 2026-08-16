@@ -140,6 +140,14 @@ export const accountProperties: INodeProperties[] = [
 		description: 'Arguments for the action, as a JSON object keyed by the ABI field names',
 	},
 	{
+		displayName: 'Actor',
+		name: 'actor',
+		type: 'string',
+		default: '',
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Account the action is authorized by. Defaults to the credential\'s account. Set it when one key controls several accounts and the contract requires a specific one — a credential holds a key, which is not the same thing as an identity.',
+	},
+	{
 		displayName: 'Permission',
 		name: 'actorPermission',
 		type: 'string',
@@ -466,7 +474,15 @@ export async function executeAccountOperations(
 		// calling, and the alternative is a workflow holding a private key in a
 		// code node to sign for itself.
 		const credentials = await getCredentials(this);
-		const actor = requireAccountName(this, credentials.account, 'Credential Account Name');
+
+		// A credential holds a key. The same key may control several accounts,
+		// and a contract that checks require_auth for a specific one will refuse
+		// anything else with "missing authority of <account>" -- which names the
+		// account it wanted, not the one that signed.
+		const actorOverride = String(this.getNodeParameter('actor', i) || '').trim();
+		const actor = actorOverride
+			? requireAccountName(this, actorOverride, 'Actor')
+			: requireAccountName(this, credentials.account, 'Credential Account Name');
 
 		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
 		const actionName = String(this.getNodeParameter('actionName', i) || '').trim();
