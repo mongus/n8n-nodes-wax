@@ -1,4 +1,4 @@
-import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationError } from 'n8n-workflow';
+import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationError, IDataObject } from 'n8n-workflow';
 import axios from 'axios';
 import {
 	createSigningApi,
@@ -60,6 +60,12 @@ export const accountProperties: INodeProperties[] = [
 				description: 'Verify an account exists',
 				action: 'Verify an account exists',
 			},
+			{
+				name: 'Send Action',
+				value: 'sendAction',
+				description: 'Call any action on any contract, signed by the credential. The escape hatch for contracts this node does not model.',
+				action: 'Send a contract action',
+			},
 		],
 		default: 'getAccountInfo',
 	},
@@ -105,6 +111,41 @@ export const accountProperties: INodeProperties[] = [
 			},
 		},
 		description: 'Whether to transfer ownership of the staked tokens to the new account',
+	},
+	{
+		displayName: 'Contract',
+		name: 'contract',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Account the contract is deployed to',
+	},
+	{
+		displayName: 'Action',
+		name: 'actionName',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Action to call, as named in the contract ABI',
+	},
+	{
+		displayName: 'Action Data',
+		name: 'actionData',
+		type: 'json',
+		default: '{}',
+		required: true,
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Arguments for the action, as a JSON object keyed by the ABI field names',
+	},
+	{
+		displayName: 'Permission',
+		name: 'actorPermission',
+		type: 'string',
+		default: 'active',
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Permission the credential signs with. Change this when the contract expects a custom permission rather than active.',
 	},
 	{
 		displayName: 'Owner Public Key',
@@ -413,6 +454,61 @@ export async function executeAccountOperations(
 			};
 		} catch (error) {
 			throw new Error(`Failed to create account: ${redactSensitive(error.message)}`);
+		}
+	} else if (operation === 'sendAction') {
+		// A generic action call. Everything else here models one specific thing;
+		// this exists because contracts the node has never heard of still need
+		// calling, and the alternative is a workflow holding a private key in a
+		// code node to sign for itself.
+		const credentials = await getCredentials(this);
+		const actor = requireAccountName(this, credentials.account, 'Credential Account Name');
+
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
+		const actionName = String(this.getNodeParameter('actionName', i) || '').trim();
+		if (!/^[a-z1-5.]{1,13}$/.test(actionName)) {
+			throw new NodeOperationError(this.getNode(), `"${actionName}" is not a valid action name`);
+		}
+
+		const permission = String(this.getNodeParameter('actorPermission', i) || 'active').trim();
+
+		const rawData = this.getNodeParameter('actionData', i);
+		let data: IDataObject;
+		try {
+			data = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData as IDataObject);
+		} catch (error) {
+			throw new NodeOperationError(this.getNode(), `Action data is not valid JSON: ${error.message}`);
+		}
+		if (!data || typeof data !== 'object' || Array.isArray(data)) {
+			throw new NodeOperationError(this.getNode(), 'Action data must be a JSON object');
+		}
+
+		try {
+			const api = await createSigningApi(this, endpoint, credentials);
+			const result = await api.transact({
+				actions: [{
+					account: contract,
+					name: actionName,
+					authorization: [{ actor, permission }],
+					data,
+				}],
+			}, { blocksBehind: 3, expireSeconds: 30 });
+
+			return {
+				returnData: {
+					json: {
+						success: true,
+						operation,
+						contract,
+						action: actionName,
+						authorization: `${actor}@${permission}`,
+						transaction: result,
+					},
+				},
+			};
+		} catch (error) {
+			throw new Error(
+				`Failed to send ${contract}::${actionName}: ${redactSensitive(error.message)}`,
+			);
 		}
 	}
 
