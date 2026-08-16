@@ -230,7 +230,7 @@ export const accountProperties: INodeProperties[] = [
 
 // Every operation here that signs a transaction. Adding an operation without
 // listing it means https is not enforced and the chain guard never runs.
-const SIGNING_OPERATIONS = new Set(['buyRam', 'stakeCpu', 'stakeNet', 'createAccount']);
+const SIGNING_OPERATIONS = new Set(['buyRam', 'stakeCpu', 'stakeNet', 'createAccount', 'sendAction']);
 
 const PUBLIC_KEY_RE = /^(EOS[1-9A-HJ-NP-Za-km-z]{50}|PUB_(K1|R1|WA)_[1-9A-HJ-NP-Za-km-z]{40,})$/;
 
@@ -263,7 +263,12 @@ export async function executeAccountOperations(
 	const signing = SIGNING_OPERATIONS.has(operation);
 	const endpoint = validateEndpoint(this, rawEndpoint, { signing });
 
-	const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
+	// sendAction has no Account Name field -- it names a contract and an action --
+	// so reading it unconditionally fails before any branch runs, with an error
+	// that names the parameter and not the operation that lacks it.
+	const account = operation === 'sendAction'
+		? ''
+		: requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
 
 	if (operation === 'getAccountInfo' || operation === 'verifyAccount') {
 		if (operation === 'getAccountInfo') {
