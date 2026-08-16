@@ -26,6 +26,21 @@ so the fallback reported `0`. A workflow gating on a balance read an unknown as
 an empty account. It now refuses, because an account may hold several balances
 and there is no single number to give.
 
+### Not changed: `createAccount`'s 2048-byte default
+
+A review called this release-blocking, on the grounds that a new account needs
+~3.5 KB and the default therefore always fails. The measurement behind that came
+from a Cloud Wallet account, which carries extra rows.
+
+A plain owner+active account uses **2996** bytes, and `eosio.system` gives every
+new account **1400** free — `ram_gift_bytes`, a compile-time constant, not a
+chain parameter. So 2048 bought yields a 3448 quota against 2996 used: 452
+spare. Verified by creating an account at exactly the default.
+
+It holds on mainnet as well: neither chain exposes a free-RAM setting in
+`eosio::global`, and both run the identical system contract
+(`db9231beb6d9…c77366d`), so the gift is the same binary's behaviour on both.
+
 ### Documentation that was wrong
 
 - The README named a credential field **Chain** with two values. It is
