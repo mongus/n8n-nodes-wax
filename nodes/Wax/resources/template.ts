@@ -1,7 +1,4 @@
 import { IExecuteFunctions, INodeExecutionData, INodeProperties } from 'n8n-workflow';
-import { Api, JsonRpc } from 'eosjs';
-import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
-import { TextEncoder, TextDecoder } from 'util';
 import {
 	buildAttributeMap,
 	createActionGenerator,
@@ -10,7 +7,7 @@ import {
 	fetchSchemaFormat,
 	requireMaxSupply,
 } from './atomic';
-import { getCredentials, requireAccountName, validateEndpoint } from './util';
+import { createSigningApi, getCredentials, requireAccountName, validateEndpoint } from './util';
 
 export const templateProperties: INodeProperties[] = [
 	{
@@ -138,7 +135,6 @@ export async function executeTemplateOperations(
 	if (operation === 'createTemplate') {
 		const credentials = await getCredentials(this);
 		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
-		const key = credentials.privateKey as string;
 
 		const collectionName = requireAccountName(
 			this,
@@ -177,14 +173,7 @@ export async function executeTemplateOperations(
 			immutableData,
 		);
 
-		const signatureProvider = new JsSignatureProvider([key]);
-		const rpc = new JsonRpc(endpoint, { fetch });
-		const api = new Api({
-			rpc,
-			signatureProvider,
-			textDecoder: new TextDecoder(),
-			textEncoder: new TextEncoder(),
-		});
+		const api = await createSigningApi(this, endpoint, credentials);
 
 		const result = await api.transact({ actions }, { blocksBehind: 3, expireSeconds: 30 });
 

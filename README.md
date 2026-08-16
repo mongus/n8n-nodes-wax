@@ -36,19 +36,41 @@ This node package provides the following operations for interacting with the WAX
 - **Buy RAM**: Purchase RAM resources for an account on the WAX blockchain
 - **Stake CPU**: Stake WAX tokens for CPU resources on the blockchain
 - **Stake NET**: Stake WAX tokens for network bandwidth resources on the blockchain
+- **Create Account**: Create a new WAX account from two public keys, buying its RAM and staking its CPU and NET in one transaction
+- **Send Action**: Call any action on any contract, signed by the credential — the escape hatch for contracts this node does not model
 
 ## Credentials
 
-For operations that require signing transactions (Transfer Tokens, Issue Tokens, Retire Tokens, Transfer Assets, Buy RAM, Stake CPU, and Stake NET), you'll need to provide:
+For operations that sign transactions, you'll need to provide:
 
 - **Account Name**: Your WAX account name
 - **Private Key**: The private key associated with your WAX account
+- **Chain**: `mainnet` or `testnet`
+
+**Set the chain.** Every signing operation verifies that the endpoint it was
+given actually serves the chain the credential names, and refuses if it does
+not. Without it, a testnet endpoint left in a workflow signs real transactions
+against mainnet — or the reverse, which looks like nothing happening at all.
+Existing credentials default to `unset`, which skips the check and preserves
+the previous behaviour, so upgrading breaks nothing; set it deliberately.
 
 To obtain a WAX account and private key:
 1. Create a WAX account through services like [WAX Cloud Wallet](https://wallet.wax.io/)
 2. Export or generate your private key (keep this secure and never share it)
 
 For read-only operations, no credentials are required, but you'll need to specify the account name as a parameter.
+
+### Send Action, in particular
+
+`Send Action` can call **any action on any contract** with the credential's
+key. That is what makes it useful and what makes it worth reading twice before
+using: nothing in the node constrains what it will sign.
+
+It takes an **Actor** separate from the credential's account name. A credential
+holds a key, and the same key may control several accounts — a contract that
+checks `require_auth` for a specific one refuses anything else with `missing
+authority of <account>`, naming the account it wanted rather than the one that
+signed. Leave Actor empty to sign as the credential's own account.
 
 ## Compatibility
 

@@ -1,15 +1,15 @@
-import { IExecuteFunctions, INodeExecutionData, INodeProperties } from 'n8n-workflow';
+import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationError, IDataObject } from 'n8n-workflow';
 import axios from 'axios';
-import { Api, JsonRpc } from 'eosjs';
-import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
-import { TextEncoder, TextDecoder } from 'util';
 import {
+	createSigningApi,
 	buildUrl,
 	getCredentials,
 	redactSensitive,
 	requireAccountName,
 	requireAmount,
 	validateEndpoint,
+	requireByteCount,
+	requireNonNegativeAmount,
 } from './util';
 
 // Account resource properties
@@ -29,6 +29,12 @@ export const accountProperties: INodeProperties[] = [
 				name: 'Buy RAM',
 				value: 'buyRam',
 				action: 'Buy RAM',
+			},
+			{
+				name: 'Create Account',
+				value: 'createAccount',
+				description: 'Create a new account with RAM and delegated CPU/NET',
+				action: 'Create a new account',
 			},
 			{
 				name: 'Get Account Info',
@@ -54,6 +60,12 @@ export const accountProperties: INodeProperties[] = [
 				description: 'Verify an account exists',
 				action: 'Verify an account exists',
 			},
+			{
+				name: 'Send Action',
+				value: 'sendAction',
+				description: 'Call any action on any contract, signed by the credential. The escape hatch for contracts this node does not model.',
+				action: 'Send a contract action',
+			},
 		],
 		default: 'getAccountInfo',
 	},
@@ -66,10 +78,10 @@ export const accountProperties: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['account'],
-				operation: ['buyRam', 'getAccountInfo', 'stakeCpu', 'stakeNet', 'verifyAccount'],
+				operation: ['buyRam', 'createAccount', 'getAccountInfo', 'stakeCpu', 'stakeNet', 'verifyAccount'],
 			},
 		},
-		description: 'WAX account name',
+		description: 'WAX account name. For Create Account this is the name of the account being created.',
 	},
 	// Buy/Stake parameters
 	{
@@ -100,7 +112,153 @@ export const accountProperties: INodeProperties[] = [
 		},
 		description: 'Whether to transfer ownership of the staked tokens to the new account',
 	},
+	{
+		displayName: 'Contract',
+		name: 'contract',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Account the contract is deployed to',
+	},
+	{
+		displayName: 'Action',
+		name: 'actionName',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Action to call, as named in the contract ABI',
+	},
+	{
+		displayName: 'Action Data',
+		name: 'actionData',
+		type: 'json',
+		default: '{}',
+		required: true,
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Arguments for the action, as a JSON object keyed by the ABI field names',
+	},
+	{
+		displayName: 'Actor',
+		name: 'actor',
+		type: 'string',
+		default: '',
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Account the action is authorized by. Defaults to the credential\'s account. Set it when one key controls several accounts and the contract requires a specific one — a credential holds a key, which is not the same thing as an identity.',
+	},
+	{
+		displayName: 'Permission',
+		name: 'actorPermission',
+		type: 'string',
+		default: 'active',
+		displayOptions: { show: { resource: ['account'], operation: ['sendAction'] } },
+		description: 'Permission the credential signs with. Change this when the contract expects a custom permission rather than active.',
+	},
+	{
+		displayName: 'Owner Public Key',
+		name: 'ownerKey',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: {
+			show: {
+				resource: ['account'],
+				operation: ['createAccount'],
+			},
+		},
+		description: 'Public key for the owner authority. Accepts EOS..., PUB_K1_..., PUB_R1_... or PUB_WA_... (WebAuthn).',
+	},
+	{
+		displayName: 'Active Public Key',
+		name: 'activeKey',
+		type: 'string',
+		default: '',
+		required: true,
+		displayOptions: {
+			show: {
+				resource: ['account'],
+				operation: ['createAccount'],
+			},
+		},
+		description: 'Public key for the active authority. Accepts EOS..., PUB_K1_..., PUB_R1_... or PUB_WA_... (WebAuthn).',
+	},
+	{
+		displayName: 'RAM Bytes',
+		name: 'ramBytes',
+		type: 'number',
+		default: 2048,
+		required: true,
+		typeOptions: {
+			minValue: 128,
+		},
+		displayOptions: {
+			show: {
+				resource: ['account'],
+				operation: ['createAccount'],
+			},
+		},
+		description: 'Exact RAM to purchase, in bytes. Size this to what the account actually uses: surplus RAM can be sold by the account holder and is not recoverable by the payer.',
+	},
+	{
+		displayName: 'Stake CPU (WAX)',
+		name: 'stakeCpuAmount',
+		type: 'number',
+		default: 1,
+		typeOptions: {
+			minValue: 0,
+			numberPrecision: 8,
+		},
+		displayOptions: {
+			show: {
+				resource: ['account'],
+				operation: ['createAccount'],
+			},
+		},
+		description: 'WAX staked for CPU. Ownership is retained by the payer and can be reclaimed with undelegatebw.',
+	},
+	{
+		displayName: 'Stake NET (WAX)',
+		name: 'stakeNetAmount',
+		type: 'number',
+		default: 0.1,
+		typeOptions: {
+			minValue: 0,
+			numberPrecision: 8,
+		},
+		displayOptions: {
+			show: {
+				resource: ['account'],
+				operation: ['createAccount'],
+			},
+		},
+		description: 'WAX staked for NET. Ownership is retained by the payer and can be reclaimed with undelegatebw.',
+	},
 ];
+
+// Every operation here that signs a transaction. Adding an operation without
+// listing it means https is not enforced and the chain guard never runs.
+const SIGNING_OPERATIONS = new Set(['buyRam', 'stakeCpu', 'stakeNet', 'createAccount', 'sendAction']);
+
+const PUBLIC_KEY_RE = /^(EOS[1-9A-HJ-NP-Za-km-z]{50}|PUB_(K1|R1|WA)_[1-9A-HJ-NP-Za-km-z]{40,})$/;
+
+function requirePublicKey(context: IExecuteFunctions, raw: unknown, field: string): string {
+	const key = typeof raw === 'string' ? raw.trim() : '';
+	if (!key) {
+		throw new NodeOperationError(context.getNode(), `${field} is required`);
+	}
+	if (!PUBLIC_KEY_RE.test(key)) {
+		throw new NodeOperationError(
+			context.getNode(),
+			`${field} must be a legacy EOS key or a PUB_K1_ / PUB_R1_ / PUB_WA_ key`,
+		);
+	}
+	return key;
+}
+
+function singleKeyAuthority(key: string) {
+	return { threshold: 1, keys: [{ key, weight: 1 }], accounts: [], waits: [] };
+}
 
 // Account operations execution
 export async function executeAccountOperations(
@@ -110,10 +268,15 @@ export async function executeAccountOperations(
 ): Promise<{ returnData?: INodeExecutionData; invalidData?: INodeExecutionData }> {
 	const operation = this.getNodeParameter('operation', i) as string;
 	const rawEndpoint = this.getNodeParameter('endpoint', i) as string;
-	const signing = operation === 'buyRam' || operation === 'stakeCpu' || operation === 'stakeNet';
+	const signing = SIGNING_OPERATIONS.has(operation);
 	const endpoint = validateEndpoint(this, rawEndpoint, { signing });
 
-	const account = requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
+	// sendAction has no Account Name field -- it names a contract and an action --
+	// so reading it unconditionally fails before any branch runs, with an error
+	// that names the parameter and not the operation that lacks it.
+	const account = operation === 'sendAction'
+		? ''
+		: requireAccountName(this, this.getNodeParameter('account', i), 'Account Name');
 
 	if (operation === 'getAccountInfo' || operation === 'verifyAccount') {
 		if (operation === 'getAccountInfo') {
@@ -204,16 +367,7 @@ export async function executeAccountOperations(
 		}
 
 		try {
-			// Setup eosjs
-			const key = credentials.privateKey as string;
-			const signatureProvider = new JsSignatureProvider([key]);
-			const rpc = new JsonRpc(endpoint, { fetch });
-			const api = new Api({
-				rpc,
-				signatureProvider,
-				textDecoder: new TextDecoder(),
-				textEncoder: new TextEncoder()
-			});
+			const api = await createSigningApi(this, endpoint, credentials);
 
 			// Execute the transaction
 			const result = await api.transact({
@@ -237,6 +391,145 @@ export async function executeAccountOperations(
 			};
 		} catch (error) {
 			throw new Error(`Failed to execute ${operation}: ${redactSensitive(error.message)}`);
+		}
+	} else if (operation === 'createAccount') {
+		const credentials = await getCredentials(this);
+		const creator = requireAccountName(this, credentials.account, 'Credential Account Name');
+
+		const ownerKey = requirePublicKey(this, this.getNodeParameter('ownerKey', i), 'Owner Public Key');
+		const activeKey = requirePublicKey(this, this.getNodeParameter('activeKey', i), 'Active Public Key');
+		const ramBytes = requireByteCount(this, this.getNodeParameter('ramBytes', i), 'RAM Bytes');
+		const stakeCpu = requireNonNegativeAmount(this, this.getNodeParameter('stakeCpuAmount', i), 'Stake CPU (WAX)');
+		const stakeNet = requireNonNegativeAmount(this, this.getNodeParameter('stakeNetAmount', i), 'Stake NET (WAX)');
+
+		// Creating a suffixed name (e.g. player.wa) requires the credential
+		// account to be the suffix owner.
+		const actions: Array<any> = [
+			{
+				account: 'eosio',
+				name: 'newaccount',
+				authorization: [{ actor: creator, permission: 'active' }],
+				data: {
+					creator,
+					name: account,
+					owner: singleKeyAuthority(ownerKey),
+					active: singleKeyAuthority(activeKey),
+				},
+			},
+			{
+				account: 'eosio',
+				name: 'buyrambytes',
+				authorization: [{ actor: creator, permission: 'active' }],
+				data: { payer: creator, receiver: account, bytes: ramBytes },
+			},
+		];
+
+		if (stakeCpu > 0 || stakeNet > 0) {
+			actions.push({
+				account: 'eosio',
+				name: 'delegatebw',
+				authorization: [{ actor: creator, permission: 'active' }],
+				data: {
+					from: creator,
+					receiver: account,
+					stake_net_quantity: `${stakeNet.toFixed(8)} WAX`,
+					stake_cpu_quantity: `${stakeCpu.toFixed(8)} WAX`,
+					// Never transfer: staked WAX stays the payer's and is
+					// reclaimable. Transferring it hands the value to the
+					// account holder, who can unstake and keep it.
+					transfer: false,
+				},
+			});
+		}
+
+		try {
+			const api = await createSigningApi(this, endpoint, credentials);
+
+			// One transaction, so a failure part-way leaves no half-provisioned
+			// account behind.
+			const result = await api.transact({ actions }, { blocksBehind: 3, expireSeconds: 30 });
+
+			return {
+				returnData: {
+					json: {
+						success: true,
+						operation,
+						creator,
+						account,
+						ownerKey,
+						activeKey,
+						ramBytes,
+						stakeCpu: stakeCpu.toFixed(8),
+						stakeNet: stakeNet.toFixed(8),
+						transaction: result,
+					},
+				},
+			};
+		} catch (error) {
+			throw new Error(`Failed to create account: ${redactSensitive(error.message)}`);
+		}
+	} else if (operation === 'sendAction') {
+		// A generic action call. Everything else here models one specific thing;
+		// this exists because contracts the node has never heard of still need
+		// calling, and the alternative is a workflow holding a private key in a
+		// code node to sign for itself.
+		const credentials = await getCredentials(this);
+
+		// A credential holds a key. The same key may control several accounts,
+		// and a contract that checks require_auth for a specific one will refuse
+		// anything else with "missing authority of <account>" -- which names the
+		// account it wanted, not the one that signed.
+		const actorOverride = String(this.getNodeParameter('actor', i) || '').trim();
+		const actor = actorOverride
+			? requireAccountName(this, actorOverride, 'Actor')
+			: requireAccountName(this, credentials.account, 'Credential Account Name');
+
+		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
+		const actionName = String(this.getNodeParameter('actionName', i) || '').trim();
+		if (!/^[a-z1-5.]{1,13}$/.test(actionName)) {
+			throw new NodeOperationError(this.getNode(), `"${actionName}" is not a valid action name`);
+		}
+
+		const permission = String(this.getNodeParameter('actorPermission', i) || 'active').trim();
+
+		const rawData = this.getNodeParameter('actionData', i);
+		let data: IDataObject;
+		try {
+			data = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData as IDataObject);
+		} catch (error) {
+			throw new NodeOperationError(this.getNode(), `Action data is not valid JSON: ${error.message}`);
+		}
+		if (!data || typeof data !== 'object' || Array.isArray(data)) {
+			throw new NodeOperationError(this.getNode(), 'Action data must be a JSON object');
+		}
+
+		try {
+			const api = await createSigningApi(this, endpoint, credentials);
+			const result = await api.transact({
+				actions: [{
+					account: contract,
+					name: actionName,
+					authorization: [{ actor, permission }],
+					data,
+				}],
+			}, { blocksBehind: 3, expireSeconds: 30 });
+
+			return {
+				returnData: {
+					json: {
+						success: true,
+						operation,
+						contract,
+						action: actionName,
+						authorization: `${actor}@${permission}`,
+						transaction: result,
+					},
+				},
+			};
+		} catch (error) {
+			throw new Error(
+				`Failed to send ${contract}::${actionName}: ${redactSensitive(error.message)}`,
+			);
 		}
 	}
 

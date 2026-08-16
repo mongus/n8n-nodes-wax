@@ -1,8 +1,6 @@
 import { IExecuteFunctions, INodeExecutionData, INodeProperties, NodeOperationError } from 'n8n-workflow';
-import { Api, JsonRpc } from 'eosjs';
-import { JsSignatureProvider } from 'eosjs/dist/eosjs-jssig';
-import { TextEncoder, TextDecoder } from 'util';
 import {
+	createSigningApi,
 	getCredentials,
 	MAX_PAGINATION_ITERATIONS,
 	normalizeMemo,
@@ -366,17 +364,13 @@ export async function executeAssetOperations(
 	} else if (operation === 'transferAssets') {
 		const credentials = await getCredentials(this);
 		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
-		const key = credentials.privateKey as string;
 
 		const to = requireAccountName(this, this.getNodeParameter('to', i), 'To Account');
 		const memo = normalizeMemo(this, this.getNodeParameter('memo', i), 'Memo');
 		const assetIds = requireAssetIds(this, this.getNodeParameter('assetIds', i), 'Asset IDs');
 		const contract = requireAccountName(this, this.getNodeParameter('contract', i), 'Contract');
 
-		const signatureProvider = new JsSignatureProvider([key]);
-		const rpc = new JsonRpc(endpoint, { fetch });
-
-		const api = new Api({ rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder() });
+		const api = await createSigningApi(this, endpoint, credentials);
 
 		const actions = [{
 			account: contract,
@@ -405,7 +399,6 @@ export async function executeAssetOperations(
 	} else if (operation === 'mintAsset') {
 		const credentials = await getCredentials(this);
 		const from = requireAccountName(this, credentials.account, 'Credential Account Name');
-		const key = credentials.privateKey as string;
 
 		const collectionName = requireAccountName(
 			this,
@@ -469,14 +462,7 @@ export async function executeAssetOperations(
 			tokensToBack,
 		);
 
-		const signatureProvider = new JsSignatureProvider([key]);
-		const rpc = new JsonRpc(endpoint, { fetch });
-		const api = new Api({
-			rpc,
-			signatureProvider,
-			textDecoder: new TextDecoder(),
-			textEncoder: new TextEncoder(),
-		});
+		const api = await createSigningApi(this, endpoint, credentials);
 
 		const result = await api.transact({ actions }, { blocksBehind: 3, expireSeconds: 30 });
 
